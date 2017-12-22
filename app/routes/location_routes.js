@@ -1,5 +1,8 @@
 var fs = require('fs')
 var parse = require('csv-parse')
+var googleMapsClient = require('@google/maps').createClient({
+    key: 'AIzaSyCROFsqlAjTB7Y4U-sNSW-10tK3HUXJK4M'
+});
 
 var inputFile='locations.csv'
 
@@ -97,4 +100,61 @@ module.exports = function(app, db) {
             res.send("No location to delete with id: " + id)    
         }
     })
+
+    // closestlocation
+    app.get('/closestlocation', (req, res) => {
+        address = req.query['address']
+        googleMapsClient.geocode({
+            address: address
+        }, function(err, resp) {
+            if (!err) {
+                loc = resp.json.results[0].geometry.location
+                lat = loc.lat
+                lng = loc.lng
+
+                closestlocationIdx = nearestLocIdx(lat, lng)
+                res.send(closestlocationIdx + ": " + locations[closestlocationIdx])
+            } else {
+                console.log(err)
+            }
+        });
+    })
 };
+
+// return the nearest location from given lat and lng values
+function nearestLocIdx(lat, lng) {
+    smallestDistance = Infinity
+    closestIdx = -1
+    for (var idx in locations) {
+        lat2 = locations[idx][2]
+        lng2 = locations[idx][3]
+
+        dist = getDistanceFromLatLonInKm(lat, lng, lat2, lng2)
+
+        if (dist < smallestDistance) {
+            smallestDistance = dist
+            closestIdx = idx
+        }
+    }
+
+    return closestIdx
+}
+
+// https://stackoverflow.com/a/27943/4725731
+function getDistanceFromLatLonInKm(lat1,lon1,lat2,lon2) {
+  var R = 6371; // Radius of the earth in km
+  var dLat = deg2rad(lat2-lat1);  // deg2rad below
+  var dLon = deg2rad(lon2-lon1); 
+  var a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2)
+    ; 
+  var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+  var d = R * c; // Distance in km
+  return d;
+}
+
+function deg2rad(deg) {
+  return deg * (Math.PI/180)
+}
