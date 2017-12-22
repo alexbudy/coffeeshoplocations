@@ -6,7 +6,9 @@ var googleMapsClient = require('@google/maps').createClient({
 
 var inputFile='locations.csv'
 
-var locations = {}
+var locations = {}      // all locations stored in memory
+var deletedKeys = []    // keep track of all deleted keys
+
 var largestUsedKey = 0 // this key may become unused but was used at one point
 
 // id, name, address, lat, long
@@ -24,12 +26,36 @@ fs.createReadStream(inputFile).pipe(parser)
 
 console.log('Read all locations into memory from locations.csv')
 
-function genLargestUnusedKey() {
-    largestUsedKey++
-    while (largestUsedKey in locations) {
+function generateUnusedKey() {
+    if (deletedKeys.length > 0) {
+        return deletedKeys.pop()
+    } else {
         largestUsedKey++
+        while (largestUsedKey in locations) {
+            largestUsedKey++
+        }
+        return largestUsedKey
     }
-    return largestUsedKey
+}
+
+// must be between [-90, 90]
+function validateLat(lat) {
+    lat = parseFloat(lat)
+    if (lat >= -90 && lat <= 90) {
+        return lat + ""
+    } else {
+        return undefined
+    }
+}
+
+// must be between [-180, 180]
+function validateLng(lng) {
+    lng = parseFloat(lng)
+    if (lng >= -180 && lng <= 180) {
+        return lng + ""
+    } else {
+        return undefined
+    }
 }
 
 module.exports = function(app, db) {
@@ -37,8 +63,8 @@ module.exports = function(app, db) {
     app.post('/location', (req, res) => {
         name = req.body.name
         addrs = req.body.address
-        lat = parseFloat(req.body.lat) + ""
-        lng = parseFloat(req.body.lng) + ""
+        lat = validateLat(req.body.lat)
+        lng = validateLng(req.body.lng)
 
         newLoc = [name, addrs, lat, lng]
 
@@ -48,7 +74,7 @@ module.exports = function(app, db) {
                return
             }
         }
-        newKey = genLargestUnusedKey()
+        newKey = generateUnusedKey()
 
         locations[newKey] = newLoc
         res.send("Added new location with id: " + newKey)
@@ -58,7 +84,8 @@ module.exports = function(app, db) {
     app.get('/location/:id', (req, res) => {
         id = req.params.id
         if (id in locations) {
-            res.send(locations[id])
+            res.send("Id: " + id + "</br> Name: " + locations[id][0] + "</br> Address: " + locations[id][1] + 
+                "</br> Latitude: " + locations[id][2] + "</br> Longitude: " + locations[id][3])
         } else {
             res.send("No location found with id: " + id)
         }
@@ -71,13 +98,13 @@ module.exports = function(app, db) {
             curLoc = locations[id]
             name = req.body.name
             addrs = req.body.address
-            lat = parseFloat(req.body.lat) + "" // convert to string
-            lng = parseFloat(req.body.lng) + ""
+            lat = validateLat(req.body.lat)
+            lng = validateLng(req.body.lng)
 
             newLoc = [name, addrs, lat, lng]
 
             for (var i = 0; i < newLoc.length; i++) {
-                if (newLoc[i] != undefined && !isNaN(newLoc[i])) {
+                if (newLoc[i] != undefined && !isNaN(newLoc[i])) { // update the valid values only
                     curLoc[i] = newLoc[i]
                 }
             }
@@ -95,6 +122,7 @@ module.exports = function(app, db) {
 
         if (id in locations) {
             delete locations[id]
+            deletedKeys.push(id)
             res.send("Deleted location with id: " + id)
         } else {
             res.send("No location to delete with id: " + id)    
@@ -104,6 +132,11 @@ module.exports = function(app, db) {
     // closestlocation
     app.get('/closestlocation', (req, res) => {
         address = req.query['address']
+        if (Object.keys(locations).length == 0) {
+            res.send("No stored locations in memory!")
+            return
+        }
+
         googleMapsClient.geocode({
             address: address
         }, function(err, resp) {
@@ -116,6 +149,7 @@ module.exports = function(app, db) {
                 res.send(closestlocationIdx + ": " + locations[closestlocationIdx])
             } else {
                 console.log(err)
+                res.send("An error occurred: " + err)
             }
         });
     })
