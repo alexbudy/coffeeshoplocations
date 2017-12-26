@@ -1,1 +1,4 @@
 node_modules/*
+app/routes/*.js
+app.js
+server.js
