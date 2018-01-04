@@ -3,6 +3,8 @@ import { Location } from "./loc";
 import parse = require("csv-parse");
 import googleMaps = require("@google/maps");
 import fs = require("fs");
+import multer = require("multer")
+let upload = multer()
 
 let googleMapsClient = googleMaps.createClient({
     key: 'AIzaSyCROFsqlAjTB7Y4U-sNSW-10tK3HUXJK4M'
@@ -75,7 +77,7 @@ function createNewIdx(): number {
 let locRouter = express.Router();
 
 // CREATE
-locRouter.post('/location', (req: express.Request, res: express.Response) => {
+locRouter.post('/location', upload.array(),(req: express.Request, res: express.Response) => {
 
     if (req.body.name != undefined && req.body.address != undefined         && isValidLng(req.body.lng) && isValidLat(req.body.lat)) {
         let newIdx:number = createNewIdx()
@@ -100,7 +102,7 @@ locRouter.get('/location/:id', (req: express.Request, res: express.Response) => 
 });
 
 // UPDATE
-locRouter.put('/location/:id', (req: express.Request, res: express.Response) => {
+locRouter.put('/location/:id', upload.array(), (req: express.Request, res: express.Response) => {
     let id: number = req.params.id
     if (id in locations) {
         let curLoc:Location = locations[id]
